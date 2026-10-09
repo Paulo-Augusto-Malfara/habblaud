@@ -19,6 +19,9 @@ do meio (0.**3**.0).
   qualquer borda ou quina e voltam ao lugar com um duplo clique na barra. O terminal ganha o botão **Expandir na tela
   toda**. Posição e tamanho ficam guardados no navegador; em tela estreita tudo continua fixo. Solta, a gaveta deixa de
   reservar a lateral do escritório.
+- **Reordenar a lista lateral:** arrastar a linha de um agente principal muda a ordem dos agentes da sala, e arrastar
+  o cabeçalho de uma sala muda a ordem das salas (no prédio elas ficam onde estão). A ordem fica guardada no
+  navegador; a dos agentes vai pela sessão do Claude Code e sobrevive a retomar a sessão.
 
 ### Alterado
 
