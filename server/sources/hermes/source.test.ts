@@ -8,7 +8,8 @@ import { AccountsService } from '../../accounts/service';
 import { setQuiet } from '../../log';
 import { NameStore } from '../../model/names';
 import { Office } from '../../model/office';
-import { discoverHermesProfiles, loadHermesNames } from './profiles';
+import { discoverHermesProfiles, loadHermesLayout, loadHermesNames } from './profiles';
+import type { HermesGroup } from './profiles';
 import { classifyHermes, dbSignature, readSessions, WORKING_WINDOW_MS } from './reader';
 import { ACTIVE_WINDOW_MS, HermesSource } from './source';
 
@@ -89,7 +90,7 @@ function message(db: DatabaseSync, m: { session: string; role: string; at: numbe
   );
 }
 
-function setup(profiles: string[], names = {}) {
+function setup(profiles: string[], names = {}, groups: HermesGroup[] = []) {
   const h = makeHome(profiles);
   let clock = T0;
   const now = () => clock;
@@ -105,7 +106,7 @@ function setup(profiles: string[], names = {}) {
     now,
   });
   late.office = office;
-  const source = new HermesSource({ accounts, office, home: h.home, names, now });
+  const source = new HermesSource({ accounts, office, home: h.home, names, groups, now });
   const stop = () => source.stop();
   return {
     ...h,
@@ -291,6 +292,93 @@ describe('HermesSource', () => {
     expect(infos.find((s) => s.label === 'default')?.ok).toBe(false);
     expect(infos.find((s) => s.label === 'b')?.ok).toBe(true);
     expect(t.office.get('hermes:b:s')).toBeDefined();
+    t.stop();
+  });
+});
+
+describe('layout de funcionários fixos', () => {
+  const LAYOUT = {
+    default: { name: 'Ana', role: 'Chefia', look: 'f', post: 'lounge' },
+    recep: { name: 'Beto', look: 'm', post: 'recepcao' },
+    mesa: { name: 'Cris', post: 'inexistente', look: 'x' },
+    filial: { name: 'Dora' },
+    solta: { name: 'Edu' },
+    groups: [
+      { name: 'Matriz', slot: 0, profiles: ['default', 'recep', 'mesa'] },
+      { name: 'Filial/Sul', slot: 6, profiles: ['filial', 'fantasma'] },
+      { name: '', profiles: ['solta'] },
+      { name: 'Sem lista' },
+    ],
+  };
+
+  it('lê o arquivo: nomes, visual, posto válido e grupos limpos', () => {
+    const h = makeHome([]);
+    const file = join(h.home, 'layout.json');
+    writeFileSync(file, JSON.stringify(LAYOUT));
+    const { names, groups } = loadHermesLayout(file);
+    expect(names.default).toEqual({ name: 'Ana', role: 'Chefia', look: 'f', post: 'lounge' });
+    expect(names.mesa).toEqual({ name: 'Cris' });
+    expect(names).not.toHaveProperty('groups');
+    expect(groups).toEqual([
+      { name: 'Matriz', slot: 0, profiles: ['default', 'recep', 'mesa'] },
+      { name: 'Filial-Sul', slot: 6, profiles: ['filial', 'fantasma'] },
+    ]);
+    expect(loadHermesNames(file)).toEqual(names);
+    expect(loadHermesLayout(join(h.home, 'nao-existe.json'))).toEqual({ names: {}, groups: [] });
+  });
+
+  function fixedSetup() {
+    const dir = mkdtempSync(join(tmpdir(), 'habblaud-hermes-layout-'));
+    dirs.push(dir);
+    const file = join(dir, 'layout.json');
+    writeFileSync(file, JSON.stringify(LAYOUT));
+    const { names, groups } = loadHermesLayout(file);
+    return setup(['recep', 'mesa', 'filial', 'solta'], names, groups);
+  }
+
+  it('um personagem fixo por perfil agrupado, mesmo sem sessão: ocioso, nome/visual/posto do layout', () => {
+    const t = fixedSetup();
+    t.source.start();
+    const snap = t.office.commit().snapshot;
+    const fixed = (id: string) => snap.agents.find((a) => a.id === `hermes:${id}:fixo`)!;
+    expect([fixed('default'), fixed('recep'), fixed('mesa'), fixed('filial')].map((a) => [a.name, a.look, a.post, a.status])).toEqual([
+      ['Ana', 'f', 'lounge', 'idle'],
+      ['Beto', 'm', 'recepcao', 'idle'],
+      ['Cris', expect.stringMatching(/^[fm]$/), undefined, 'idle'],
+      ['Dora', expect.stringMatching(/^[fm]$/), undefined, 'idle'],
+    ]);
+    // 'solta' tem state.db mas o grupo dela é inválido (sem nome): fora do layout e sem sessão, não aparece (como na H1)
+    expect(snap.agents.some((a) => a.id.includes('solta'))).toBe(false);
+    expect(new Set(['default', 'recep', 'mesa'].map((p) => fixed(p).roomId)).size).toBe(1);
+    const rooms = snap.rooms;
+    expect(rooms.find((r) => r.name === 'Matriz')?.pin).toBe(0);
+    expect(rooms.find((r) => r.name === 'Filial-Sul')?.pin).toBe(6);
+    t.stop();
+  });
+
+  it('com sessões: trabalha, título/atividade da mais recente, papel conta as conversas; sem sessão volta a ocioso', () => {
+    const t = fixedSetup();
+    t.write('default', (db) => {
+      session(db, { id: 'velha', source: 'telegram', title: 'Conversa antiga', started: T0 - 600_000, activity: T0 - 300_000 });
+      message(db, { session: 'velha', role: 'assistant', at: T0 - 300_000, finish: 'stop' });
+      session(db, { id: 'nova', source: 'cron', title: 'Relatório da manhã', started: T0 - 60_000, activity: T0 - 1_000 });
+      message(db, { session: 'nova', role: 'tool', at: T0 - 1_000, tool: 'search' });
+      session(db, { id: 'sub', source: 'subagent', parent: 'nova', title: 'Ajudante', started: T0 - 30_000, activity: T0 - 1_000 });
+    });
+    t.source.start();
+    const a = t.office.get('hermes:default:fixo')!;
+    expect(a).toMatchObject({ name: 'Ana', status: 'working', title: 'Relatório da manhã', role: 'Chefia (2 conversas)', post: 'lounge' });
+    expect(a.activity?.text).toContain('search');
+    expect(t.office.list().filter((x) => x.account === 'default' && x.kind === 'main')).toHaveLength(1);
+    expect(t.office.list().find((x) => x.kind === 'sub')?.parentId).toBe('hermes:default:fixo');
+    expect(t.source.sources().find((s) => s.label === 'default')?.sessions).toBe(2);
+
+    t.advance(ACTIVE_WINDOW_MS + 60_000);
+    t.source.poll(false);
+    const idle = t.office.get('hermes:default:fixo')!;
+    expect(idle).toMatchObject({ status: 'idle', role: 'Chefia', name: 'Ana' });
+    expect(idle.title).toBeUndefined();
+    expect(t.source.sources().find((s) => s.label === 'default')?.sessions).toBe(0);
     t.stop();
   });
 });

@@ -7,6 +7,10 @@
 //   sala do perfil; papel = papel do perfil + origem (telegram, cron...), título = sessions.title;
 // - status: lease de turno (session_turn_leases) ou prompt/ferramenta sem resposta há menos de 2 min = trabalhando;
 //   senão ocioso. "Esperando" (aprovação, clarify) vem da ponte do Hermes, que esta etapa não lê;
+// - perfis num grupo do arquivo de layout (profiles.ts) são FUNCIONÁRIOS FIXOS: um único personagem por perfil, sempre
+//   presente na sala do grupo (cwd "/hermes/<grupo>", com vaga fixa se o grupo tiver `slot`), com nome e visual do
+//   layout e, se houver `post`, de pé na recepção/lounge. Sem sessão aberta fica ocioso; com sessões, trabalha se alguma
+//   está trabalhando, mostra o título/atividade da mais recente e o papel ganha a contagem de conversas abertas;
 // - sessões com source "subagent" e parent_session_id = sessão aberta viram subagentes do pai; ao encerrar entregam;
 // - atividade: a última mensagem da sessão (prompt, ferramenta, resposta), uma por mensagem nova.
 //
@@ -19,7 +23,8 @@ import type { AccountEntry, AccountsService } from '../../accounts/service';
 import { errMsg, log } from '../../log';
 import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
-import { discoverHermesProfiles, type HermesNames, type HermesProfile } from './profiles';
+import { hash32 } from '../../../shared/hash';
+import { discoverHermesProfiles, type HermesGroup, type HermesNames, type HermesProfile } from './profiles';
 import { classifyHermes, dbSignature, readSessions, type HermesSession } from './reader';
 
 /** Sessão sem atividade há mais que isto não está aberta, mesmo sem ended_at (o Hermes não fecha as do Telegram). */
@@ -34,6 +39,8 @@ export interface HermesSourceOptions {
   /** HERMES_HOME (a pasta do perfil padrão). */
   home: string;
   names?: HermesNames;
+  /** Grupos do layout: os perfis listados viram funcionários fixos da sala do grupo. */
+  groups?: HermesGroup[];
   now?: () => number;
   pollMs?: number;
 }
@@ -51,6 +58,10 @@ interface Tracked {
   state: ProfileState;
   sessionId: string;
   lastMsgId?: number;
+  /** Funcionário fixo do perfil (um por perfil, sem sessão própria). */
+  fixed?: boolean;
+  /** Fixo: quantas sessões abertas o perfil tem agora. */
+  open?: number;
 }
 
 function shortFor(name: string, taken: Set<string>): string {
@@ -61,6 +72,8 @@ function shortFor(name: string, taken: Set<string>): string {
   return pick;
 }
 
+const roomCwd = (name: string) => `/hermes/${name.replace(/[\\/]+/g, '-')}`;
+
 export class HermesSource implements AgentSource {
   readonly provider = 'hermes' as const;
   private readonly now: () => number;
@@ -70,7 +83,7 @@ export class HermesSource implements AgentSource {
 
   constructor(private readonly opts: HermesSourceOptions) {
     this.now = opts.now ?? Date.now;
-    const profiles = discoverHermesProfiles(opts.home, opts.names);
+    const profiles = discoverHermesProfiles(opts.home, opts.names, opts.groups);
     const taken = [...opts.accounts.entries(), ...opts.accounts.entriesOf('codex')];
     const shorts = new Set(taken.map((e) => e.detected.short.toUpperCase()));
     const colors = new Set(taken.map((e) => e.detected.color));
@@ -88,6 +101,7 @@ export class HermesSource implements AgentSource {
 
   start(): void {
     const { office } = this.opts;
+    for (const g of this.opts.groups ?? []) if (g.slot !== undefined) office.pinRoom(roomCwd(g.name), g.slot);
     office.beginBoot();
     try {
       this.poll(true);
@@ -106,7 +120,7 @@ export class HermesSource implements AgentSource {
   sources(): SourceInfo[] {
     return this.states.map((st) => {
       let sessions = 0;
-      for (const t of this.tracked.values()) if (t.state === st && t.kind === 'main') sessions++;
+      for (const t of this.tracked.values()) if (t.state === st && t.kind === 'main') sessions += t.fixed ? (t.open ?? 0) : 1;
       const info: SourceInfo = { label: st.acc.id, provider: 'hermes', path: st.profile.dir, sessions, ok: !st.error };
       if (st.error) info.error = st.error;
       return info;
@@ -157,13 +171,57 @@ export class HermesSource implements AgentSource {
     return `hermes:${st.acc.id}:${sessionId}`;
   }
 
+  private fixedId(st: ProfileState): string {
+    return `hermes:${st.acc.id}:fixo`;
+  }
+
+  /** Funcionário fixo do perfil: criado uma vez, nunca fecha; reflete as sessões abertas (ver cabeçalho). */
+  private reconcileFixed(st: ProfileState, mains: HermesSession[], now: number, boot: boolean, live: Set<string>): void {
+    const { office } = this.opts;
+    const p = st.profile;
+    const id = this.fixedId(st);
+    live.add(id);
+    const lead = [...mains].sort((a, b) => b.activityAt - a.activityAt)[0];
+    const status = mains.some((s) => classifyHermes(s, now) === 'working') ? 'working' : 'idle';
+    const base = p.role ?? 'Agente Hermes';
+    const role = mains.length > 1 ? `${base} (${mains.length} conversas)` : lead ? `${base} (${lead.source})` : base;
+    let t = this.tracked.get(id);
+    if (!t) {
+      office.addMain({
+        id,
+        provider: 'hermes',
+        account: st.acc.id,
+        sessionId: `fixo:${p.id}`,
+        cwd: roomCwd(p.group!.name),
+        role,
+        startedAt: now,
+        status,
+        person: { name: p.name, look: p.look ?? (hash32(p.id) % 2 ? 'm' : 'f') },
+        ...(p.post ? { post: p.post } : {}),
+      });
+      t = { kind: 'main', state: st, sessionId: `fixo:${p.id}`, fixed: true };
+      this.tracked.set(id, t);
+    }
+    t.open = mains.length;
+    office.setStatus(id, status);
+    office.setRole(id, role);
+    if (lead) {
+      const sum = (f: (s: HermesSession) => number) => mains.reduce((n, s) => n + f(s), 0);
+      const stats: AgentStats = { toolCalls: sum((s) => s.toolCalls), tokensIn: sum((s) => s.tokensIn), tokensOut: sum((s) => s.tokensOut), subagents: 0 };
+      if (mains.some((s) => s.costUSD !== undefined)) stats.costUSD = sum((s) => s.costUSD ?? 0);
+      this.apply(id, t, lead, boot, stats);
+    } else office.applyTranscript(id, { tasks: [], stats: { toolCalls: 0, tokensIn: 0, tokensOut: 0, subagents: 0 } });
+  }
+
   private reconcile(st: ProfileState, now: number, boot: boolean): void {
     const { office } = this.opts;
     const open = (s: HermesSession) => s.endedAt === undefined && now - s.activityAt <= ACTIVE_WINDOW_MS;
     const mains = st.rows.filter((s) => s.source !== SUBAGENT_SOURCE && !IGNORED_SOURCES.has(s.source) && open(s));
     const live = new Set<string>();
+    const fixed = !!st.profile.group;
+    if (fixed) this.reconcileFixed(st, mains, now, boot, live);
 
-    for (const s of mains) {
+    for (const s of fixed ? [] : mains) {
       const id = this.idOf(st, s.id);
       live.add(id);
       let t = this.tracked.get(id);
@@ -174,7 +232,7 @@ export class HermesSource implements AgentSource {
           provider: 'hermes',
           account: st.acc.id,
           sessionId: s.id,
-          cwd: `/hermes/${st.profile.name.replace(/[\\/]+/g, '-')}`,
+          cwd: roomCwd(st.profile.name),
           role,
           startedAt: s.startedAt || now,
           status: classifyHermes(s, now),
@@ -190,7 +248,7 @@ export class HermesSource implements AgentSource {
     for (const s of st.rows) {
       if (s.source !== SUBAGENT_SOURCE || !s.parentId || !parentIds.has(s.parentId)) continue;
       const id = this.idOf(st, s.id);
-      const parentId = this.idOf(st, s.parentId);
+      const parentId = fixed ? this.fixedId(st) : this.idOf(st, s.parentId);
       if (s.endedAt !== undefined || now - s.activityAt > ACTIVE_WINDOW_MS) {
         if (this.tracked.has(id)) office.completeSub(id);
         continue;
@@ -214,10 +272,10 @@ export class HermesSource implements AgentSource {
     }
   }
 
-  private apply(id: string, t: Tracked, s: HermesSession, boot: boolean): void {
+  private apply(id: string, t: Tracked, s: HermesSession, boot: boolean, total?: AgentStats): void {
     const { office } = this.opts;
-    const stats: AgentStats = { toolCalls: s.toolCalls, tokensIn: s.tokensIn, tokensOut: s.tokensOut, subagents: 0 };
-    if (s.costUSD !== undefined) stats.costUSD = s.costUSD;
+    const stats: AgentStats = total ?? { toolCalls: s.toolCalls, tokensIn: s.tokensIn, tokensOut: s.tokensOut, subagents: 0 };
+    if (!total && s.costUSD !== undefined) stats.costUSD = s.costUSD;
     office.applyTranscript(id, {
       ...(s.title ? { title: s.title.slice(0, 80) } : {}),
       tasks: [],

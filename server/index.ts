@@ -33,7 +33,7 @@ import { discoverCodexDirs } from './sources/codex/accounts';
 import { CodexHistory } from './sources/codex/history';
 import { CodexSource } from './sources/codex/source';
 import { HermesSource } from './sources/hermes/source';
-import { hermesHome, loadHermesNames } from './sources/hermes/profiles';
+import { hermesHome, loadHermesLayout } from './sources/hermes/profiles';
 import { createBuildReader } from './build';
 import { UpdateChecker } from './updates/checker';
 
@@ -96,8 +96,8 @@ if (codex) agents.add(codex);
 // Hermes (só leitura, por polling): só com HABBLAUD_HERMES=1 ou HERMES_HOME; nomes opcionais em HABBLAUD_HERMES_NAMES
 // ou <dataDir>/hermes.json.
 if (config.hermes) {
-  const names = loadHermesNames(process.env.HABBLAUD_HERMES_NAMES?.trim() || join(config.dataDir, 'hermes.json'));
-  agents.add(new HermesSource({ accounts, office, home: hermesHome(process.env, config.home), names }));
+  const { names, groups } = loadHermesLayout(process.env.HABBLAUD_HERMES_NAMES?.trim() || join(config.dataDir, 'hermes.json'));
+  agents.add(new HermesSource({ accounts, office, home: hermesHome(process.env, config.home), names, groups }));
 }
 // Eventos dos hooks do Codex (POST /api/codex/events, mod/habblaud-codex/hook.mjs): vão para a fonte do Codex ao vivo
 // (CodexLive); sem ela (nenhuma pasta do Codex ou HABBLAUD_CODEX=0) a rota responde {ok: false}.
