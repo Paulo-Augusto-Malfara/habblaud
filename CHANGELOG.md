@@ -24,7 +24,8 @@ do meio (0.**3**.0).
   navegador; a dos agentes vai pela sessão do Claude Code e sobrevive a retomar a sessão.
 - **Renomear sala:** botão direito numa sala (na lista lateral ou no escritório) abre um campo para dar outro nome a
   ela; vazio volta ao nome da pasta. O nome fica no servidor (`rooms.json`, na pasta de dados do Habblaud), por pasta:
-  vale em qualquer navegador e sobrevive a reinícios. Só pelo próprio computador; as salas de demonstração não mudam.
+  vale em qualquer navegador e sobrevive a reinícios. Na gaveta da sala, um lápis ao lado do nome abre o mesmo campo.
+  Só pelo próprio computador; as salas de demonstração não mudam.
 
 ### Alterado
 

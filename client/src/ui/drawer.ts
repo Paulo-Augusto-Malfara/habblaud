@@ -38,6 +38,7 @@ import {
   visibleShells,
 } from './model';
 import { isLocalHostname, PermissionCard } from './permission';
+import { canRenameRoom } from './roomrename';
 import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel, providerOf } from './provider';
 import { createAgentRow, updateAgentRow } from './rows';
 import { SocialSection } from './social';
@@ -712,6 +713,7 @@ class RoomView {
   private last: RoomInfo | null = null;
   private swatch: HTMLElement;
   private name: HTMLElement;
+  private renameBtn: HTMLButtonElement;
   private path: HTMLElement;
   private gone: HTMLElement;
   private accs: KeyedList<string>;
@@ -727,6 +729,16 @@ class RoomView {
   constructor(private ctx: UiContext) {
     this.swatch = h('span', { class: 'ui-room-hero__swatch', attrs: { 'aria-hidden': 'true' } });
     this.name = h('h2', { class: 'ui-hero__name' });
+    // Lápis: o mesmo campo do botão direito na sala (ui/roomrename.ts), aberto embaixo do nome.
+    this.renameBtn = iconButton(
+      ICONS.pencil,
+      'Renomear sala',
+      () => {
+        const r = this.name.getBoundingClientRect();
+        ctx.renameRoom?.(this.id, { x: r.left, y: r.bottom + 6 });
+      },
+      'ui-icon-btn--sm ui-room-hero__rename',
+    );
     this.path = h('span', { class: 'ui-room-hero__path' });
     const centerBtn = h('button', { class: 'ui-btn', type: 'button', title: 'Levar a câmera até a sala', on: { click: () => ctx.focusSelection() } });
     centerBtn.innerHTML = ICONS.center;
@@ -771,7 +783,7 @@ class RoomView {
         'div',
         { class: 'ui-room-hero' },
         this.swatch,
-        h('div', { class: 'ui-hero__text' }, this.name, h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
+        h('div', { class: 'ui-hero__text' }, h('div', { class: 'ui-room-hero__title' }, this.name, this.renameBtn), h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
       ),
       this.gone,
       h('div', { class: 'ui-status' }, accsEl, h('span', { class: 'ui-status__actions' }, centerBtn)),
@@ -808,6 +820,7 @@ class RoomView {
       // Sem tema: cor padrão.
     }
     setHidden(this.gone, !!live);
+    setHidden(this.renameBtn, !live || !canRenameRoom(this.ctx, r.id));
 
     const snap = this.ctx.store.snapshot;
     const agents = (snap?.agents ?? []).filter((a) => a.roomId === r.id);
