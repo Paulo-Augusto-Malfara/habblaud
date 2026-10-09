@@ -67,6 +67,14 @@ describe('layout do prédio', () => {
     for (const e of elevators) expect(b.grid.walkable(e.tx, e.ty)).toBe(true);
   });
 
+  it('recepção: balcão de dois módulos e posto da recepcionista atrás dele, alcançável', () => {
+    const desks = reception.furniture.filter((f) => f.kind === 'reception_desk');
+    expect(desks).toHaveLength(2);
+    const post = reception.spots.find((s) => s.group === 'post:recepcao')!;
+    expect(post.ty).toBeLessThan(desks[0].ty);
+    expect(reachable(post.tx, post.ty)).toBe(true);
+  });
+
   it('todos os spots são alcançáveis a partir dos elevadores', () => {
     const unreachable = b.spots.filter((s) => !reachable(s.tx, s.ty)).map((s) => s.id);
     expect(unreachable).toEqual([]);

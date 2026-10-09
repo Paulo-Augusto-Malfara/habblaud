@@ -44,8 +44,10 @@ export function layoutReception(): AreaLayout {
 
   b.furn('plant_tall', 1, 2, 'monstera', { order: 0.2 });
   b.furn('plant_tall', 14, 4, 'ficus', { order: 0.21 });
+  // balcão comprido (dois módulos) sob a placa; a recepcionista fica atrás dele (posto "recepcao")
   b.furn('reception_desk', 9, 5, undefined, { order: 0.4 });
-  b.furn('plant_small', 12, 5, 'flower', { order: 0.45 });
+  b.furn('reception_desk', 12, 5, undefined, { order: 0.41 });
+  b.furn('plant_small', 13, 4, 'flower', { order: 0.45 });
   b.furn('filing_cabinet', 8, 5, undefined, { order: 0.42 });
   // cantinho de espera com poltronas
   b.seat('armchair', 'armchair', 9, 8, 'right', 'right', { order: 0.6 });
