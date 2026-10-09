@@ -23,6 +23,8 @@ export interface HermesProfile {
   post?: string;
   /** Grupo do arquivo de layout: o perfil vira um funcionário fixo da sala desse grupo. */
   group?: HermesGroup;
+  /** Mesa fixa na sala do grupo: posição do perfil na lista do grupo (as reservadas contam e ficam vazias). */
+  desk?: number;
 }
 
 export interface HermesNameEntry {
@@ -116,6 +118,15 @@ function titleCase(id: string): string {
   return id === DEFAULT_PROFILE ? 'Hermes' : id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+/**
+ * Postos reservados de um grupo: ids da lista que não são perfis do Hermes (ainda sem state.db, ex.: um bot que vai
+ * existir). Cada um guarda a sua mesa vazia (a posição na lista é a mesa) até o perfil aparecer.
+ */
+export function reservedSeats(group: HermesGroup, profiles: readonly HermesProfile[]): Array<{ id: string; desk: number }> {
+  const known = new Set(profiles.map((p) => p.id));
+  return group.profiles.flatMap((id, desk) => (known.has(id) ? [] : [{ id, desk }]));
+}
+
 /** Perfis com state.db em `home`, o padrão primeiro e os demais por nome. */
 export function discoverHermesProfiles(home: string, names: HermesNames = {}, groups: readonly HermesGroup[] = []): HermesProfile[] {
   const dirs: Array<{ id: string; dir: string }> = [{ id: DEFAULT_PROFILE, dir: home }];
@@ -137,7 +148,10 @@ export function discoverHermesProfiles(home: string, names: HermesNames = {}, gr
       if (n?.look) p.look = n.look;
       if (n?.post) p.post = n.post;
       const group = groups.find((g) => g.profiles.includes(d.id));
-      if (group) p.group = group;
+      if (group) {
+        p.group = group;
+        p.desk = group.profiles.indexOf(d.id);
+      }
       return p;
     });
 }

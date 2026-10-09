@@ -125,6 +125,17 @@ describe('assentos e reservas', () => {
     expect(pick('e')).toBeNull();
   });
 
+  it('mesa preferida (n-ésima por preferência) se livre; senão a melhor livre', () => {
+    const spots = [spot('d0', 'desk', { rank: 0 }), spot('d1', 'desk', { rank: 1 }), spot('d2', 'desk', { rank: 2 })];
+    const taken = new Set<string>();
+    const free = (id: string) => !taken.has(id);
+    expect(chooseSeat(spots, free, 'main', 2)?.id).toBe('d2');
+    taken.add('d2');
+    expect(chooseSeat(spots, free, 'main', 2)?.id).toBe('d0');
+    expect(chooseSeat(spots, free, 'main', 9)?.id).toBe('d0');
+    expect(chooseSeat(spots, free, 'main')?.id).toBe('d0');
+  });
+
   it('reserva tem um único dono e alternativas livres são encontradas', () => {
     const reg = new SpotRegistry();
     reg.setSpots([spot('c1', 'coffee', { tx: 0 }), spot('c2', 'coffee', { tx: 10 })]);

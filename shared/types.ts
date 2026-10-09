@@ -150,6 +150,11 @@ export interface AgentInfo {
   post?: string;
   /** Funcionário fixo (a fonte o mantém sempre presente): ocioso, fica no seu lugar em vez de sair para passeios. */
   fixed?: boolean;
+  /**
+   * Mesa preferida na sala, por ordem de preferência das mesas (0 = a melhor). Funcionários fixos de uma sala nomeada
+   * ganham mesas estáveis; postos reservados (sem agente) deixam a mesa livre. Ocupada ou inexistente: mesa livre qualquer.
+   */
+  desk?: number;
   /** Título da sessão (principal) ou descrição da tarefa (sub). */
   title?: string;
   sessionId: string;

@@ -8,7 +8,7 @@ import { AccountsService } from '../../accounts/service';
 import { setQuiet } from '../../log';
 import { NameStore } from '../../model/names';
 import { Office } from '../../model/office';
-import { discoverHermesProfiles, loadHermesLayout, loadHermesNames } from './profiles';
+import { discoverHermesProfiles, loadHermesLayout, loadHermesNames, reservedSeats } from './profiles';
 import type { HermesGroup } from './profiles';
 import { classifyHermes, dbSignature, readSessions, WORKING_WINDOW_MS } from './reader';
 import { ACTIVE_WINDOW_MS, HermesSource } from './source';
@@ -354,6 +354,29 @@ describe('layout de funcionários fixos', () => {
     const rooms = snap.rooms;
     expect(rooms.find((r) => r.name === 'Matriz')?.pin).toBe(0);
     expect(rooms.find((r) => r.name === 'Filial-Sul')?.pin).toBe(6);
+    t.stop();
+  });
+
+  it('mesa fixa pela posição no grupo; ids sem state.db são postos reservados (mesa vazia, sem personagem)', () => {
+    const t = fixedSetup();
+    t.source.start();
+    const snap = t.office.commit().snapshot;
+    const desk = (id: string) => snap.agents.find((a) => a.id === `hermes:${id}:fixo`)?.desk;
+    expect(['default', 'recep', 'mesa'].map(desk)).toEqual([0, 1, 2]);
+    // Filial: 'filial' é a mesa 0; 'fantasma' (sem banco) reserva a mesa 1, sem personagem nenhum
+    expect(desk('filial')).toBe(0);
+    expect(snap.agents.some((a) => a.id.includes('fantasma'))).toBe(false);
+    const groups = [{ name: 'Filial', profiles: ['alfa', 'reservado', 'beta', 'outro'] }];
+    const h = makeHome(['alfa', 'beta']);
+    const found = discoverHermesProfiles(h.home, {}, groups).filter((p) => p.group);
+    expect(found.map((p) => [p.id, p.desk])).toEqual([
+      ['alfa', 0],
+      ['beta', 2],
+    ]);
+    expect(reservedSeats(groups[0], found)).toEqual([
+      { id: 'reservado', desk: 1 },
+      { id: 'outro', desk: 3 },
+    ]);
     t.stop();
   });
 

@@ -472,7 +472,7 @@ export class Sim {
     if (!room || !room.present) return;
     // posto fixo do núcleo (recepção, lounge), se pedido e livre; senão a mesa da sala
     const post = ch.info.post ? this.building.spots.find((s) => s.group === `post:${ch.info.post}` && this.spots.isFree(s.id, ch.id)) : undefined;
-    const seat = post ?? chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind);
+    const seat = post ?? chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind, ch.info.desk);
     if (seat && this.spots.reserve(seat.id, ch.id)) ch.homeSpot = seat.id;
   }
 

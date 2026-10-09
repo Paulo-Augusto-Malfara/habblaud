@@ -199,6 +199,7 @@ export class HermesSource implements AgentSource {
         fixed: true,
         person: { name: p.name, look: p.look ?? (hash32(p.id) % 2 ? 'm' : 'f') },
         ...(p.post ? { post: p.post } : {}),
+        ...(p.desk !== undefined ? { desk: p.desk } : {}),
       });
       t = { kind: 'main', state: st, sessionId: `fixo:${p.id}`, fixed: true };
       this.tracked.set(id, t);
