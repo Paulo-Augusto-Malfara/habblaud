@@ -36,6 +36,21 @@ do meio (0.**3**.0).
 - A linha do tempo do agente mostra os 15 itens mais recentes, com **Mostrar mais** (mais 15 a cada clique, até
   os 200 guardados) e **Mostrar menos** (volta aos 15). Antes eram 80 de uma vez.
 
+### Corrigido
+
+- No Windows, as mensagens ao Codex procuravam `codex` no PATH e achavam o script que o npm instala ao lado do
+  executável: o Habblaud dizia que as mensagens estavam ligadas, mas cada entrega falhava, porque o script não roda
+  sem shell. Agora a busca é pelo `codex.exe`. Com o Codex instalado só pelo npm, aponte `HABBLAUD_CODEX_BIN` para um
+  `codex.exe`.
+- No Windows, o comando de statusline que já existia antes do `npm run usage:install` (o Habblaud o guarda e
+  continua rodando) era executado pelo `cmd.exe`, e o que funcionava no Claude Code (aspas simples, variáveis, pipes)
+  quebrava. Agora ele roda no Git Bash, como no Claude Code: o de `CLAUDE_CODE_GIT_BASH_PATH` ou o da instalação do
+  Git. Sem o Git Bash, continua no `cmd.exe`.
+- No Windows, os instaladores (`usage:install`, `hooks:install`, `codex:install` e `mod:install`) mostravam os
+  caminhos da pasta do usuário por inteiro (`C:\Users\...`) em vez de `~/...`.
+- A suíte de testes (`npm test`) passa no Windows: os testes que supunham caminhos, shell ou permissões do Linux e do
+  macOS agora valem nos três sistemas, e os poucos que dependem de algo que o Windows não tem são pulados nele.
+
 ## [0.7.0] - 2026-10-09
 
 Para atualizar: `git pull` e `npm run docker:up` (o Codex aparece sozinho, se houver uma pasta `~/.codex`). Para ver o
