@@ -101,6 +101,8 @@ export interface MainInput {
   person?: PersonName;
   /** Posto fixo no núcleo do prédio (AgentInfo.post). */
   post?: string;
+  /** Funcionário fixo (AgentInfo.fixed). */
+  fixed?: boolean;
 }
 
 export interface SubInput {
@@ -310,6 +312,7 @@ export class Office {
     };
     if (p.provider && p.provider !== 'claude') info.provider = p.provider;
     if (p.post) info.post = p.post;
+    if (p.fixed) info.fixed = true;
     if (p.status === 'waiting') info.waitingFor = p.waitingFor ?? 'responder no terminal';
     const rec: AgentRecord = { info, history: [] };
     if (p.status === 'working') rec.turnStart = now;

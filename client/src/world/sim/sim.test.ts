@@ -431,6 +431,20 @@ describe('salas sem buracos', () => {
     expect(sim.rooms.get('/a')!.lightOn).toBe(true);
   });
 
+  it('funcionário fixo ocioso (sozinho na sala) não sai em passeio; o comum sai', () => {
+    const left = (extra: Partial<AgentInfo>, seconds: number) => {
+      const sim = newSim();
+      const clock = { now: T0 };
+      sim.applySnapshot(snap([room('/a', 0)], [agent('ana', '/a', 'idle', extra)]), clock.now);
+      const ana = sim.chars.get('ana')!;
+      let out = false;
+      run(sim, clock, seconds, () => (out ||= ana.atSpot !== ana.homeSpot));
+      return out;
+    };
+    expect(left({ fixed: true }, 480)).toBe(false);
+    expect(left({}, 480)).toBe(true);
+  });
+
   it('terminal fechou: a sala mais distante se muda para a vaga, o pessoal vai andando e o prédio encolhe', () => {
     const sim = newSim();
     const clock = { now: T0 };

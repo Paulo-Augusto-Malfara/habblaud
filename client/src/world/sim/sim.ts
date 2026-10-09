@@ -1172,7 +1172,7 @@ export class Sim {
     }
     if (ch.atSpot !== ch.homeSpot) return this.planGoHome(ch, now);
     ch.arriving = false;
-    if (ch.mode === 'idle' && !isLongIdle(ch.info.status, ch.info.statusSince, now)) {
+    if (ch.mode === 'idle' && !ch.info.fixed && !isLongIdle(ch.info.status, ch.info.statusSince, now)) {
       if (!ch.nextOutingAt) ch.nextOutingAt = now + idleSitMs(ch.rng, this.options().liveliness);
       if (now >= ch.nextOutingAt) {
         if (this.planOuting(ch, now)) return true;

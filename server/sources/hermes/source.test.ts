@@ -347,6 +347,7 @@ describe('layout de funcionários fixos', () => {
       ['Cris', expect.stringMatching(/^[fm]$/), undefined, 'idle'],
       ['Dora', expect.stringMatching(/^[fm]$/), undefined, 'idle'],
     ]);
+    expect([fixed('default'), fixed('mesa')].every((a) => a.fixed === true)).toBe(true);
     // 'solta' tem state.db mas o grupo dela é inválido (sem nome): fora do layout e sem sessão, não aparece (como na H1)
     expect(snap.agents.some((a) => a.id.includes('solta'))).toBe(false);
     expect(new Set(['default', 'recep', 'mesa'].map((p) => fixed(p).roomId)).size).toBe(1);

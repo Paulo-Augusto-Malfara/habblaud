@@ -196,6 +196,7 @@ export class HermesSource implements AgentSource {
         role,
         startedAt: now,
         status,
+        fixed: true,
         person: { name: p.name, look: p.look ?? (hash32(p.id) % 2 ? 'm' : 'f') },
         ...(p.post ? { post: p.post } : {}),
       });

@@ -148,6 +148,8 @@ export interface AgentInfo {
    * desse ambiente em vez de uma mesa da sala. Sem posto livre, usa a mesa.
    */
   post?: string;
+  /** Funcionário fixo (a fonte o mantém sempre presente): ocioso, fica no seu lugar em vez de sair para passeios. */
+  fixed?: boolean;
   /** Título da sessão (principal) ou descrição da tarefa (sub). */
   title?: string;
   sessionId: string;
