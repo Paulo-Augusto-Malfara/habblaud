@@ -19,7 +19,7 @@ export interface ApiDeps {
   sources: () => SourceInfo[];
   version: string;
   inDocker: boolean;
-  /** Terminal somente leitura ligado (ServerConfig.terminal: só com bind local). */
+  /** Terminal ligado (ServerConfig.terminal: só com bind local). */
   terminal?: boolean;
   /** Streams do terminal; sem eles o recurso fica desligado mesmo com `terminal`. */
   terminals?: TerminalStreams;
@@ -32,6 +32,12 @@ export interface ApiDeps {
    * local (ServerConfig.terminal); a trava do Host local é conferida aqui antes de chamá-las.
    */
   permissions?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
+  /**
+   * Rotas das mensagens pelo escritório (/api/messages e a caixa de entrada do plugin em /api/mod/inbox,
+   * server/messages/http.ts). Só existem com ServerConfig.messages (a trava do terminal e HABBLAUD_MENSAGENS); a
+   * trava do Host local é conferida aqui antes de chamá-las.
+   */
+  messages?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
   /** Estatísticas do "Meu dia" (GET /api/stats, http/stats.ts). */
   stats?: DayStatsService;
   /** Verificação de versão nova no GitHub (GET /api/updates, POST /api/updates/check; updates/checker.ts). */
@@ -47,6 +53,11 @@ const TERMINAL_ROUTE = /^\/api\/agents\/([^/]+)\/terminal$/;
 /** PUT|DELETE /api/agents/:id/character: personagem do projeto (ver Office.setCharacter). */
 const CHARACTER_ROUTE = /^\/api\/agents\/([^/]+)\/character$/;
 const NOT_EDITABLE = 'agente não encontrado: só o agente principal de uma sessão aberta tem personagem editável';
+
+/** Rotas das mensagens pelo escritório (server/messages/http.ts); /api/mod/summary fica de fora (sem trava). */
+function isMessagesPath(path: string): boolean {
+  return path === '/api/messages' || path.startsWith('/api/messages/') || path === '/api/mod/inbox' || path === '/api/mod/inbox/ack';
+}
 
 const MAX_BODY = 256 * 1024;
 
@@ -217,6 +228,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
           docker: deps.inDocker,
           terminal: !!terminals,
           permissions: !!deps.permissions,
+          messages: !!deps.messages,
           updates: updatesSummary(deps.updates?.status()),
           sources: deps.sources(),
           accounts: accounts.entries().map((a) => ({ id: a.id, usageStatus: accounts.usageView(a.id).status })),
@@ -237,9 +249,9 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
     if (terminalMatch) {
       if (method !== 'GET') methodNotAllowed(res, 'GET');
       else if (!terminals) {
-        sendJson(res, 403, { error: 'terminal somente leitura desligado: ele só funciona com o Habblaud acessível apenas pelo próprio computador' });
+        sendJson(res, 403, { error: 'terminal desligado: ele só funciona com o Habblaud acessível apenas pelo próprio computador' });
       } else if (!isLoopbackHost(req.headers.host)) {
-        sendJson(res, 403, { error: 'o terminal somente leitura só abre pelo próprio computador (http://localhost ou http://127.0.0.1)' });
+        sendJson(res, 403, { error: 'o terminal só abre pelo próprio computador (http://localhost ou http://127.0.0.1)' });
       } else {
         let id: string;
         try {
@@ -284,6 +296,19 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
           return true;
         }
         handleCharacter(req, res, id, method).catch((err) => fail(res, err));
+      }
+      return true;
+    }
+    if (isMessagesPath(path)) {
+      // As mensagens entram na sessão como se você as tivesse digitado: a mesma trava (recurso ligado + Host local).
+      if (!deps.messages) {
+        sendJson(res, 403, {
+          error: 'mensagens pelo escritório desligadas: só funcionam com o Habblaud acessível apenas pelo próprio computador (e sem HABBLAUD_MENSAGENS=0)',
+        });
+      } else if (!isLoopbackHost(req.headers.host)) {
+        sendJson(res, 403, { error: 'mensagens só são mandadas pelo próprio computador (http://localhost ou http://127.0.0.1)' });
+      } else {
+        deps.messages(req, res, path);
       }
       return true;
     }

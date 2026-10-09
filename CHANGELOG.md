@@ -15,7 +15,35 @@ do meio (0.**3**.0).
 - **Editar o personagem de um projeto.** Nos detalhes do agente principal, o lápis ao lado do nome abre um editor
   com o nome, **Sortear** e as peças (pele, cabelo, barba, olhos, roupa, sapatos e acessório), com prévia. A escolha
   vale para o projeto: a próxima sessão na mesma sala chega com o mesmo personagem, e **Voltar ao sorteio** desfaz.
-  Só funciona pelo próprio computador, como o terminal somente leitura.
+  Só funciona pelo próprio computador, como o terminal.
+
+## [0.6.0] - 2026-10-09
+
+Para atualizar: `git pull`, `npm run docker:up` e `npm run mod:install` (traz o plugin de permissões novo e o de
+mensagens); nas sessões já abertas, `/reload-plugins`.
+
+### Adicionado
+
+- **Responder as perguntas do agente pelo escritório.** Quando o agente faz uma pergunta (`AskUserQuestion`), o cartão
+  de perguntas mostra cada uma com as opções e as descrições: escolha uma (ou várias, quando a pergunta deixa),
+  escreva a sua em "Outro" ou recuse. Como nas permissões, o diálogo continua no terminal e vale o que você responder
+  primeiro; a tecla `P` e o contador "precisam de você" também levam às perguntas. Precisa do plugin
+  `habblaud-permissoes` desta versão.
+- **Mandar mensagens aos agentes pelo escritório.** Os detalhes de cada agente principal ganham a seção "Mandar
+  mensagem": o texto entra na sessão como se você tivesse digitado no terminal dela (com o agente ocupado, entra
+  quando ele terminar o turno), e a caixa mostra se a mensagem está na fila, foi entregue ou não. Vem de um plugin
+  novo, `habblaud-mensagens` (Claude Code 2.1.287+), instalado pelo `npm run mod:install` (`-- --sem-mensagens` deixa
+  de fora); o `npm run docker:up` não o instala sozinho, só avisa. Segue a trava do terminal (só acesso local) e
+  `HABBLAUD_MENSAGENS=0` desliga. Leia o aviso em "Privacidade e segurança" no README: qualquer programa desta máquina
+  consegue mandar mensagem às sessões que têm o plugin.
+
+### Alterado
+
+- **O terminal (tecla `T`) aceita digitação.** Deixou de ser "somente leitura": nos agentes principais, o rodapé
+  virou a caixa de mensagem (`Enter` manda, `Shift+Enter` quebra a linha). Subagentes e sessões do histórico continuam
+  só para ler.
+- `npm run mod:install`, `mod:status` e `mod:uninstall` cuidam também do plugin `habblaud-mensagens`, e o
+  `mod:status` diz se o Habblaud está com as mensagens ligadas.
 
 ## [0.5.0] - 2026-10-09
 
