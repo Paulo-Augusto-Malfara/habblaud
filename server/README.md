@@ -302,6 +302,10 @@ opcional (`<dataDir>/hermes.json`, ou `HABBLAUD_HERMES_NAMES`) dá nome, visual,
   sessões trabalha com o título da mais recente (várias sessões = um personagem, papel `base (N conversas)`).
 - `groups[].name` é o nome da sala; `slot` (opcional, 0..63) fixa a vaga (par = norte, ímpar = sul, coluna = 2 + slot/2).
 - `look` (`f`|`m`) e `post` (`recepcao`|`lounge`) são opcionais; sem `post` o funcionário usa uma mesa da sala.
+- A posição do perfil em `profiles` é a **mesa fixa** dele na sala (por ordem de preferência das mesas). Um id sem
+  `state.db` (bot que ainda vai existir) é um **posto reservado**: a mesa fica livre, sem personagem, até o perfil aparecer.
+  Ex.: `"profiles": ["vesta", "coder", "payroll"]` = Vesta na 1ª mesa e duas mesas vazias reservadas.
+- O balcão da recepção (dois módulos, sob a placa) tem o posto `recepcao` atrás dele.
 - Perfis fora de grupos seguem o comportamento padrão: um personagem por sessão aberta.
 
 ## Codex
