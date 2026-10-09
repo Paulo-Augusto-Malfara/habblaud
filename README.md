@@ -413,8 +413,8 @@ agente principal e clique no lápis ao lado do nome (**Editar personagem**). No 
 - **Voltar ao sorteio:** desfaz a escolha.
 
 A escolha fica em `~/.habblaud/names.json` e some depois de 60 dias sem uso do projeto. O editor tem a mesma trava do
-terminal somente leitura: só funciona com o Habblaud acessível apenas pelo próprio computador e aberto por
-`http://localhost`.
+terminal somente leitura: o lápis só aparece com o terminal ligado (sem `HABBLAUD_TERMINAL=0`) e o acesso local, isto
+é, com o Habblaud acessível apenas pelo próprio computador e aberto por `http://localhost`.
 
 ### GitHub no escritório
 
@@ -524,7 +524,7 @@ Tudo funciona sem configurar nada. Se precisar ajustar, use variáveis de ambien
 | `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` | Onde o mod (ou o tap de statusline) grava o uso. |
 | `HABBLAUD_DEMO` | desligado | `1` liga o modo demonstração ao iniciar. |
 | `HABBLAUD_ALLOWED_HOSTS` | — | Nomes extras aceitos no endereço (ex.: `meu-mac.local`), além de `localhost` e IPs. |
-| `HABBLAUD_TERMINAL` | ligado (só com acesso local) | `0` desliga o terminal somente leitura. Com a porta exposta ele já fica desligado, sem opção de ligar. |
+| `HABBLAUD_TERMINAL` | ligado (só com acesso local) | `0` desliga o terminal somente leitura e, junto com ele, o editor de personagem. Com a porta exposta ele já fica desligado, sem opção de ligar. |
 | `HABBLAUD_UPDATE_CHECK` | ligado | `0` desliga a verificação de versão nova (uma consulta às releases do repositório no GitHub a cada 6 h). |
 | `HABBLAUD_ACCOUNTS` | — | JSON para personalizar nome, letra ou cor, casado pelo nome da pasta da conta. Ex.: `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
 
@@ -576,6 +576,8 @@ mod/      o mod do Habblaud e o plugin de permissões (plugins do Claude Code; m
 | `GET /api/snapshot` | Estado atual do escritório. |
 | `GET /api/agents/:id` | Detalhes de um agente, com até 200 atividades. |
 | `GET /api/agents/:id/terminal` | SSE do terminal somente leitura (eventos `init` e `append`); só com acesso local. |
+| `PUT /api/agents/:id/character` | Editar o personagem: `{name, seed, parts}` grava o nome e a aparência do agente principal como o personagem do projeto (a sala); só com acesso local. |
+| `DELETE /api/agents/:id/character` | "Voltar ao sorteio": apaga o personagem do projeto e o agente volta ao nome sorteado; só com acesso local. |
 | `GET /api/sessions/recent` | Histórico: sessões dos últimos 7 dias de todas as contas (até 150); só com acesso local. |
 | `GET /api/sessions/:conta/:sessionId/terminal` | SSE da conversa de uma sessão do histórico (mesmo protocolo do terminal); só com acesso local. |
 | `GET /api/stats?day=AAAA-MM-DD` | Estatísticas do Meu dia (tempo por status, projetos, contas, horas, esperas, tokens e custo). |
@@ -649,6 +651,9 @@ das contas (letra, e-mail, organização) são lidos no host pelo `docker:up` e 
   para aquele pedido. Atenção: qualquer programa ou pessoa que consiga abrir `http://localhost:4747` nesta máquina
   também consegue responder; em computadores compartilhados com outros usuários, não instale o hook
   (`npm run mod:install -- --sem-permissoes`).
+- **Editor de personagem, só local:** salvar ou voltar ao sorteio muda o escritório e grava em `names.json`, então
+  segue a mesma trava do terminal (bind local, `Host` local, nada de proxies ou túneis): sem ela, o lápis não aparece
+  e o servidor responde `403`. As mudanças exigem JSON e origem local. `HABBLAUD_TERMINAL=0` desliga junto.
 - **Estatísticas do Meu dia:** só números agregados (tempo por status, contagens, tokens, custo) com nomes de projeto,
   conta e agente, guardados em `HABBLAUD_DATA_DIR/stats/` por 30 dias — nada da conversa.
 - **O que aparece na tela:** resumos das atividades (ferramenta, arquivo, comando ou consulta), títulos das sessões,
