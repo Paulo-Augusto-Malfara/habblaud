@@ -282,6 +282,28 @@ snapshot e em `messages` no `/api/health`.
 Qualquer processo local consegue chamar essas rotas (como as de permissão): ligar as mensagens é aceitar que um
 programa da própria máquina possa digitar nas sessões que têm o plugin.
 
+## Hermes: funcionários fixos e salas fixas
+
+Com `HABBLAUD_HERMES=1` (ou `HERMES_HOME`) a fonte Hermes lê os perfis em modo somente leitura. Um arquivo de layout
+opcional (`<dataDir>/hermes.json`, ou `HABBLAUD_HERMES_NAMES`) dá nome, visual, posto e sala a cada perfil:
+
+```json
+{
+  "alice": { "name": "Alice", "role": "Atendimento", "look": "f", "post": "recepcao" },
+  "bruno": { "name": "Bruno", "look": "m", "post": "lounge" },
+  "groups": [
+    { "name": "Matriz", "slot": 0, "profiles": ["alice", "bruno"] },
+    { "name": "Filial", "slot": 6, "profiles": ["dora"] }
+  ]
+}
+```
+
+- Perfis listados em `groups[].profiles` viram **um funcionário fixo** cada: sempre presente, ocioso sem sessão; com
+  sessões trabalha com o título da mais recente (várias sessões = um personagem, papel `base (N conversas)`).
+- `groups[].name` é o nome da sala; `slot` (opcional, 0..63) fixa a vaga (par = norte, ímpar = sul, coluna = 2 + slot/2).
+- `look` (`f`|`m`) e `post` (`recepcao`|`lounge`) são opcionais; sem `post` o funcionário usa uma mesa da sala.
+- Perfis fora de grupos seguem o comportamento padrão: um personagem por sessão aberta.
+
 ## Codex
 
 Fontes de agentes (`sources/source.ts`): `SourceSet` junta a do Claude Code (`ClaudeWatcher`) e, quando há pastas do
