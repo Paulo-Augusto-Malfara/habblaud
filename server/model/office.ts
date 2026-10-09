@@ -14,6 +14,7 @@ import type {
   OfficeSnapshot,
   PermissionDecision,
   PermissionRequestInfo,
+  Provider,
   RoomInfo,
   ShellJob,
   SourceInfo,
@@ -87,6 +88,8 @@ export interface TranscriptSummary {
 
 export interface MainInput {
   id: string;
+  /** Ferramenta do agente (AgentInfo.provider); ausente = 'claude'. Os subagentes herdam a do principal. */
+  provider?: Provider;
   account: string;
   sessionId: string;
   cwd: string;
@@ -197,6 +200,8 @@ export class Office {
   private demo: DemoSimulator | null = null;
   private demoSnap: OfficeSnapshot | null = null;
   private booting = false;
+  /** Fontes bootando agora (beginBoot/endBoot contados): o boot só termina quando todas terminaram. */
+  private bootDepth = 0;
   private bootFeed: FeedItem[] = [];
   /** Festa/alarme das salas (eventos do GitHub). */
   private effects = new RoomEffects();
@@ -220,13 +225,21 @@ export class Office {
 
   // ---------------------------------------------------------------- boot
 
-  /** Durante o boot: sem avisos; o feed é montado em ordem cronológica no final. */
+  /**
+   * Durante o boot: sem avisos; o feed é montado em ordem cronológica no final. Contado: cada fonte de agentes
+   * (sources/source.ts) chama beginBoot ao começar a reconstruir as sessões abertas e endBoot ao terminar (num
+   * `finally`, inclusive se o boot for assíncrono); o escritório só fica "pronto" (feed ordenado, balões de
+   * espera, sem avisos atrasados) quando a última termina.
+   */
   beginBoot(): void {
+    if (this.bootDepth++ > 0) return;
     this.booting = true;
     this.bootFeed = [];
   }
 
   endBoot(): void {
+    if (this.bootDepth === 0) return; // endBoot sem beginBoot: ignorado
+    if (--this.bootDepth > 0) return;
     this.booting = false;
     const sorted = this.bootFeed.sort((a, b) => a.activity.at - b.activity.at).slice(-FEED_LIMIT);
     this.bootFeed = [];
@@ -242,6 +255,11 @@ export class Office {
       rec.synthWait = prev ? { id: act.id, prev } : { id: act.id };
     }
     this.markDirty();
+  }
+
+  /** Alguma fonte ainda está bootando. */
+  isBooting(): boolean {
+    return this.booting;
   }
 
   // ---------------------------------------------------------------- consultas
@@ -311,6 +329,7 @@ export class Office {
       stats: zeroStats(),
       seed: chosen?.seed ?? hash32(p.id),
     };
+    if (p.provider && p.provider !== 'claude') info.provider = p.provider;
     if (chosen) {
       info.custom = true;
       if (chosen.parts) info.parts = { ...chosen.parts };
@@ -573,6 +592,7 @@ export class Office {
       stats: zeroStats(),
       seed: hash32(p.id),
     };
+    if (parent.info.provider) info.provider = parent.info.provider;
     if (p.title) info.title = p.title;
     if (p.background) info.background = true;
     this.agents.set(p.id, { info, history: [], turnStart: now });

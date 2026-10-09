@@ -3,9 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { NAME_MAX, parseAppearanceParts, parseCharacterName, parseSeed } from '../../shared/appearance';
 import type { AgentInfo, ModSummary, OfficeSnapshot, SourceInfo, UpdateStatus } from '../../shared/types';
 import type { AccountsService } from '../accounts/service';
+import { handleCodexEvent } from '../codex/http';
 import type { DayStatsService } from '../history/daystats';
 import type { Office } from '../model/office';
-import type { SessionHistory } from '../sources/history';
+import type { CodexLive } from '../sources/codex/live';
+import type { SessionLookup } from '../sources/source';
 import { isJsonContentType, isLoopbackHost } from './guard';
 import { handleSessionsRoute } from './sessions';
 import type { Hub } from './sse';
@@ -23,8 +25,11 @@ export interface ApiDeps {
   terminal?: boolean;
   /** Streams do terminal; sem eles o recurso fica desligado mesmo com `terminal`. */
   terminals?: TerminalStreams;
-  /** Histórico de sessões do terminal (GET /api/sessions/*, http/sessions.ts); mesma trava do terminal. */
-  sessions?: SessionHistory;
+  /**
+   * Histórico de sessões do terminal (GET /api/sessions/*, http/sessions.ts): o HistorySet de todas as ferramentas
+   * (ou um provedor sozinho); mesma trava do terminal.
+   */
+  sessions?: SessionLookup;
   /** Rotas do timelapse (/api/timeline/*, ver http/timeline.ts); devolve false para o resto. */
   timeline?: (req: IncomingMessage, res: ServerResponse, url: URL) => boolean;
   /**
@@ -33,11 +38,17 @@ export interface ApiDeps {
    */
   permissions?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
   /**
-   * Rotas das mensagens pelo escritório (/api/messages e a caixa de entrada do plugin em /api/mod/inbox,
-   * server/messages/http.ts). Só existem com ServerConfig.messages (a trava do terminal e HABBLAUD_MENSAGENS); a
-   * trava do Host local é conferida aqui antes de chamá-las.
+   * Rotas das mensagens pelo escritório (/api/messages, a caixa de entrada do plugin em /api/mod/inbox e a do auxiliar
+   * do Codex em /api/codex/bridge/*, server/messages/http.ts). Só existem com ServerConfig.messages (a trava do
+   * terminal e HABBLAUD_MENSAGENS); a trava do Host local é conferida aqui antes de chamá-las.
    */
   messages?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
+  /**
+   * Fonte do Codex ao vivo: recebe os eventos dos hooks do Codex (POST /api/codex/events, server/codex/http.ts). Sem
+   * ela a rota responde {ok: false}. Só com Host local e, fora do Docker, conexão pelo loopback (os eventos só observam:
+   * não dependem da trava do terminal).
+   */
+  codexLive?: CodexLive;
   /** Estatísticas do "Meu dia" (GET /api/stats, http/stats.ts). */
   stats?: DayStatsService;
   /** Verificação de versão nova no GitHub (GET /api/updates, POST /api/updates/check; updates/checker.ts). */
@@ -54,9 +65,23 @@ const TERMINAL_ROUTE = /^\/api\/agents\/([^/]+)\/terminal$/;
 const CHARACTER_ROUTE = /^\/api\/agents\/([^/]+)\/character$/;
 const NOT_EDITABLE = 'agente não encontrado: só o agente principal de uma sessão aberta tem personagem editável';
 
+/** Conexão vinda do próprio computador (127.x, ::1 ou ::ffff:127.x). */
+function isLoopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.replace(/^::ffff:/i, '');
+  return a === '::1' || /^127\./.test(a);
+}
+
 /** Rotas das mensagens pelo escritório (server/messages/http.ts); /api/mod/summary fica de fora (sem trava). */
 function isMessagesPath(path: string): boolean {
-  return path === '/api/messages' || path.startsWith('/api/messages/') || path === '/api/mod/inbox' || path === '/api/mod/inbox/ack';
+  return (
+    path === '/api/messages' ||
+    path.startsWith('/api/messages/') ||
+    path === '/api/mod/inbox' ||
+    path === '/api/mod/inbox/ack' ||
+    path === '/api/codex/bridge/poll' ||
+    path === '/api/codex/bridge/ack'
+  );
 }
 
 const MAX_BODY = 256 * 1024;
@@ -229,9 +254,14 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
           terminal: !!terminals,
           permissions: !!deps.permissions,
           messages: !!deps.messages,
+          codexEvents: !!deps.codexLive,
           updates: updatesSummary(deps.updates?.status()),
           sources: deps.sources(),
-          accounts: accounts.entries().map((a) => ({ id: a.id, usageStatus: accounts.usageView(a.id).status })),
+          accounts: accounts.allEntries().map((a) =>
+            a.provider === 'claude'
+              ? { id: a.id, usageStatus: accounts.usageView(a.id).status }
+              : { id: a.id, provider: a.provider, usageStatus: accounts.usageView(a.id).status },
+          ),
         });
       }
       return true;
@@ -297,6 +327,16 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
         }
         handleCharacter(req, res, id, method).catch((err) => fail(res, err));
       }
+      return true;
+    }
+    if (path === '/api/codex/events') {
+      // Eventos dos hooks do Codex: só observam, mas só valem vindos do próprio computador. Fora do Docker o hook
+      // sempre conecta pelo loopback (o Host sozinho um cliente da rede consegue imitar); no Docker ele chega pela porta
+      // publicada, com o endereço do gateway.
+      if (method !== 'POST') methodNotAllowed(res, 'POST');
+      else if (!isLoopbackHost(req.headers.host) || (!deps.inDocker && !isLoopbackAddress(req.socket.remoteAddress))) {
+        sendJson(res, 403, { error: 'eventos do Codex só são aceitos pelo próprio computador (http://localhost ou http://127.0.0.1)' });
+      } else handleCodexEvent(req, res, { live: deps.codexLive, entries: () => accounts.entriesOf('codex') }).catch((err) => fail(res, err));
       return true;
     }
     if (isMessagesPath(path)) {
