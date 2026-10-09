@@ -17,6 +17,33 @@ do meio (0.**3**.0).
   vale para o projeto: a próxima sessão na mesma sala chega com o mesmo personagem, e **Voltar ao sorteio** desfaz.
   Só funciona pelo próprio computador, como o terminal somente leitura.
 
+## [0.5.0] - 2026-10-09
+
+### Adicionado
+
+- O cartão "Precisa de você" mostra as perguntas do `AskUserQuestion` completas, com as opções e as descrições
+  (até 4 perguntas, com 6 opções cada). É só para ler: a resposta continua sendo dada no Claude Code.
+- Verificação automática no GitHub (Actions): a cada push na `main` e a cada pull request, o projeto roda
+  `typecheck`, testes e build no Node 22.12, a versão mínima que o `package.json` declara.
+
+### Corrigido
+
+- Quando um arquivo de transcript era apagado e outro, maior, era criado no lugar, o Habblaud podia não perceber a
+  troca: alguns sistemas de arquivos reaproveitam o número (inode) do arquivo apagado, e só o inode era comparado.
+  Agora também contam o momento de criação do arquivo (quando o sistema o informa) e o começo dele, e a leitura
+  recomeça do início do arquivo novo.
+- No Windows, com o Node 23 até o 24.19, o hook do plugin `habblaud-permissoes` caía ao sair (código 0xC0000409,
+  um bug do Node: nodejs/node#56645) logo depois de receber a resposta do escritório. A decisão chegava antes da
+  queda, mas sem decisão (como em "Responder no terminal") a sessão podia registrar um erro do hook. Agora o hook
+  sai sem cair.
+- O `npm install` alterava o `package-lock.json` (o do repositório estava desatualizado em relação ao
+  `package.json`), e por isso o `git pull` da versão seguinte parava com "Your local changes … would be
+  overwritten". Agora o arquivo fica igual. Quem já tem a alteração roda uma vez `git checkout -- package-lock.json`
+  antes do `git pull`.
+- No Windows, o mod não gravava o uso de 5 horas e semanal quando o `HOME` não estava definido (o normal fora do Git
+  Bash): agora usa o `USERPROFILE`. E um `CLAUDE_CONFIG_DIR` com `\` (ex.: `C:\Users\voce\.claude-conta2`) virava um
+  nome de arquivo inválido; agora dá a mesma conta, inclusive com o Habblaud no Docker.
+
 ## [0.4.0] - 2026-10-08
 
 ### Alterado
@@ -100,7 +127,8 @@ Primeira versão publicada.
   Subagentes chegam, trabalham e entregam ao principal. Mostra as duas contas, com o uso de 5 horas e semanal de
   cada uma (tap de statusline), além de feed de atividade, avisos e modo demonstração. Roda no Node ou no Docker local.
 
-[Não lançado]: https://github.com/marmottajr/habblaud/compare/v0.4.0...HEAD
+[Não lançado]: https://github.com/marmottajr/habblaud/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/marmottajr/habblaud/releases/tag/v0.5.0
 [0.4.0]: https://github.com/marmottajr/habblaud/releases/tag/v0.4.0
 [0.3.2]: https://github.com/marmottajr/habblaud/releases/tag/v0.3.2
 [0.3.1]: https://github.com/marmottajr/habblaud/releases/tag/v0.3.1
