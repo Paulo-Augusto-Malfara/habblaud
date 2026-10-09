@@ -22,6 +22,9 @@ do meio (0.**3**.0).
 - **Reordenar a lista lateral:** arrastar a linha de um agente principal muda a ordem dos agentes da sala, e arrastar
   o cabeçalho de uma sala muda a ordem das salas (no prédio elas ficam onde estão). A ordem fica guardada no
   navegador; a dos agentes vai pela sessão do Claude Code e sobrevive a retomar a sessão.
+- **Renomear sala:** botão direito numa sala (na lista lateral ou no escritório) abre um campo para dar outro nome a
+  ela; vazio volta ao nome da pasta. O nome fica no servidor (`rooms.json`, na pasta de dados do Habblaud), por pasta:
+  vale em qualquer navegador e sobrevive a reinícios. Só pelo próprio computador; as salas de demonstração não mudam.
 
 ### Alterado
 
