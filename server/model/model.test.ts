@@ -113,6 +113,30 @@ describe('Office', () => {
     expect(office.commit().notices.filter((n) => n.level === 'alert')).toHaveLength(1);
   });
 
+  it('funcionário fixo: nome/visual e posto dados pela fonte, vaga fixa da sala e papel atualizável', () => {
+    const { office, now } = makeOffice();
+    office.pinRoom('/fonte/Matriz/', 6);
+    office.addMain({
+      id: 'acc:fixo',
+      account: 'acc',
+      sessionId: 'fixo:p1',
+      cwd: '/fonte/Matriz',
+      role: 'Atendimento',
+      startedAt: now(),
+      status: 'idle',
+      person: { name: 'Alice', look: 'f' },
+      post: 'recepcao',
+    });
+    office.addMain({ id: 'acc:2', account: 'acc', sessionId: 's2', cwd: '/p/outra', role: 'x', startedAt: now(), status: 'idle' });
+    office.setRole('acc:fixo', 'Atendimento · 3 conversas');
+    const snap = office.commit().snapshot;
+    const a = snap.agents.find((x) => x.id === 'acc:fixo')!;
+    expect([a.name, a.look, a.post, a.role]).toEqual(['Alice', 'f', 'recepcao', 'Atendimento · 3 conversas']);
+    expect(snap.rooms.find((r) => r.name === 'Matriz')!.pin).toBe(6);
+    expect(snap.rooms.find((r) => r.name === 'outra')!.pin).toBeUndefined();
+    expect(snap.agents.find((x) => x.id === 'acc:2')!.post).toBeUndefined();
+  });
+
   it('feed traz a conta do agente; snapshot leva só as últimas atividades (histórico completo no detalhe)', () => {
     const { office, advance, now } = makeOffice();
     office.addMain({ id: 'acc:1', account: 'acc', sessionId: 's1', cwd: '/p/a', role: 'x', startedAt: now(), status: 'working' });

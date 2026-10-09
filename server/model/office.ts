@@ -25,6 +25,7 @@ import { SHELL_WAIT_TOOL, SPECIAL, type ShellOutcome } from '../../shared/activi
 import { DemoSimulator } from '../../shared/demo/simulator';
 import { describeGitHubEvent, githubEventKey, RoomEffects, type GitHubEvent } from '../../shared/github';
 import { hash32 } from '../../shared/hash';
+import type { PersonName } from '../../shared/names';
 import { applyPermission } from '../permissions/registry';
 import type { NameStore } from './names';
 import { normalizeCwd, roomDisplayNames, SlotAllocator } from './rooms';
@@ -96,6 +97,10 @@ export interface MainInput {
   startedAt: number;
   status: AgentStatus;
   waitingFor?: string;
+  /** Nome e visual fixos (funcionário fixo de uma fonte); ausente = sorteado e lembrado pelo NameStore. */
+  person?: PersonName;
+  /** Posto fixo no núcleo do prédio (AgentInfo.post). */
+  post?: string;
 }
 
 export interface SubInput {
@@ -162,6 +167,8 @@ export class Office {
   private rooms = new Map<string, { path: string; createdAt: number }>();
   private slots = new SlotAllocator(SLOT_COOLDOWN_MS);
   private roomNames = new Map<string, string>();
+  /** Vagas fixas pedidas pelas fontes, por id de sala (RoomInfo.pin). */
+  private roomPins = new Map<string, number>();
   private feed: FeedItem[] = [];
   private pendingFeed: FeedItem[] = [];
   private pendingNotices: Notice[] = [];
@@ -282,7 +289,7 @@ export class Office {
     }
     const roomId = normalizeCwd(p.cwd);
     this.ensureRoom(roomId, now);
-    const person = this.deps.names.assign(p.sessionId, this.usedNames());
+    const person = p.person ?? this.deps.names.assign(p.sessionId, this.usedNames());
     const info: AgentInfo = {
       id: p.id,
       kind: 'main',
@@ -302,12 +309,29 @@ export class Office {
       seed: hash32(p.id),
     };
     if (p.provider && p.provider !== 'claude') info.provider = p.provider;
+    if (p.post) info.post = p.post;
     if (p.status === 'waiting') info.waitingFor = p.waitingFor ?? 'responder no terminal';
     const rec: AgentRecord = { info, history: [] };
     if (p.status === 'working') rec.turnStart = now;
     this.agents.set(p.id, rec);
     const acc = this.deps.accountName(p.account);
     this.notice('arrive', p.id, 'info', `👋 ${info.name} chegou em ${this.roomName(roomId)}${acc ? ` (${acc})` : ''}`, roomId);
+    this.markDirty();
+  }
+
+  /** Fixa a sala `cwd` numa vaga do prédio (RoomInfo.pin). */
+  pinRoom(cwd: string, slot: number): void {
+    const id = normalizeCwd(cwd);
+    if (this.roomPins.get(id) === slot) return;
+    this.roomPins.set(id, slot);
+    this.markDirty();
+  }
+
+  /** Troca o papel exibido de um principal (ex.: contagem de conversas de um funcionário fixo). */
+  setRole(id: string, role: string): void {
+    const info = this.agents.get(id)?.info;
+    if (!info || info.role === role) return;
+    info.role = role;
     this.markDirty();
   }
 
@@ -813,6 +837,7 @@ export class Office {
         slot: this.slots.slotOf(id) ?? 0,
         seed: hash32(id),
         createdAt: r.createdAt,
+        ...(this.roomPins.has(id) ? { pin: this.roomPins.get(id) } : {}),
       }))
       .sort((a, b) => a.slot - b.slot);
     // festa/alarme (eventos do GitHub): das salas reais ou do demo

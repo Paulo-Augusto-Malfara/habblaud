@@ -143,6 +143,11 @@ export interface AgentInfo {
   look: 'f' | 'm';
   /** Papel. Principal: "Agente principal". Sub: tipo do subagente ("Explore", "Plan", "fork"...). */
   role: string;
+  /**
+   * Posto fixo no núcleo do prédio (ex.: "recepcao", "lounge"): o personagem tem como lugar de trabalho o ponto em pé
+   * desse ambiente em vez de uma mesa da sala. Sem posto livre, usa a mesa.
+   */
+  post?: string;
   /** Título da sessão (principal) ou descrição da tarefa (sub). */
   title?: string;
   sessionId: string;
@@ -196,6 +201,11 @@ export interface RoomInfo {
    * compact). Vaga no cliente: coluna = floor(vaga / 2); par = lado norte do corredor, ímpar = lado sul.
    */
   slot: number;
+  /**
+   * Vaga fixa pedida pela fonte (ex.: layout do Hermes): o cliente põe a sala exatamente nesta vaga (mesma regra de
+   * coluna/lado de `slot`), não a muda de lugar ao compactar e não a empresta a outras salas. Ausente = vaga livre.
+   */
+  pin?: number;
   /** Semente para cores/decoração determinísticas. */
   seed: number;
   createdAt: number;
