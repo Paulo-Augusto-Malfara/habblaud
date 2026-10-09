@@ -24,7 +24,7 @@ import { errMsg, log } from '../../log';
 import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
 import { hash32 } from '../../../shared/hash';
-import { discoverHermesProfiles, type HermesGroup, type HermesNames, type HermesProfile } from './profiles';
+import { discoverHermesProfiles, reservedSeats, type HermesGroup, type HermesNames, type HermesProfile } from './profiles';
 import { classifyHermes, dbSignature, readSessions, type HermesSession } from './reader';
 
 /** Sessão sem atividade há mais que isto não está aberta, mesmo sem ended_at (o Hermes não fecha as do Telegram). */
@@ -101,7 +101,11 @@ export class HermesSource implements AgentSource {
 
   start(): void {
     const { office } = this.opts;
-    for (const g of this.opts.groups ?? []) if (g.slot !== undefined) office.pinRoom(roomCwd(g.name), g.slot);
+    for (const g of this.opts.groups ?? []) {
+      if (g.slot !== undefined) office.pinRoom(roomCwd(g.name), g.slot);
+      // perfis da lista sem state.db: a mesa fica guardada (subagentes e outros não sentam nela)
+      office.holdDesks(roomCwd(g.name), reservedSeats(g, this.states.map((s) => s.profile)).map((r) => r.desk));
+    }
     office.beginBoot();
     try {
       this.poll(true);

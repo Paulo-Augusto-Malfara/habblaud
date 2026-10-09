@@ -173,6 +173,8 @@ export class Office {
   private roomNames = new Map<string, string>();
   /** Vagas fixas pedidas pelas fontes, por id de sala (RoomInfo.pin). */
   private roomPins = new Map<string, number>();
+  /** Mesas reservadas pelas fontes, por id de sala (RoomInfo.deskHolds). */
+  private roomHolds = new Map<string, number[]>();
   private feed: FeedItem[] = [];
   private pendingFeed: FeedItem[] = [];
   private pendingNotices: Notice[] = [];
@@ -330,6 +332,17 @@ export class Office {
     const id = normalizeCwd(cwd);
     if (this.roomPins.get(id) === slot) return;
     this.roomPins.set(id, slot);
+    this.markDirty();
+  }
+
+  /** Reserva mesas da sala `cwd` (RoomInfo.deskHolds): posições na ordem de preferência das mesas. */
+  holdDesks(cwd: string, desks: readonly number[]): void {
+    const id = normalizeCwd(cwd);
+    const next = [...new Set(desks)].sort((a, b) => a - b);
+    const cur = this.roomHolds.get(id) ?? [];
+    if (cur.length === next.length && cur.every((d, i) => d === next[i])) return;
+    if (next.length) this.roomHolds.set(id, next);
+    else this.roomHolds.delete(id);
     this.markDirty();
   }
 
@@ -844,6 +857,7 @@ export class Office {
         seed: hash32(id),
         createdAt: r.createdAt,
         ...(this.roomPins.has(id) ? { pin: this.roomPins.get(id) } : {}),
+        ...(this.roomHolds.has(id) ? { deskHolds: [...this.roomHolds.get(id)!] } : {}),
       }))
       .sort((a, b) => a.slot - b.slot);
     // festa/alarme (eventos do GitHub): das salas reais ou do demo

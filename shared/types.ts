@@ -213,6 +213,11 @@ export interface RoomInfo {
    * coluna/lado de `slot`), não a muda de lugar ao compactar e não a empresta a outras salas. Ausente = vaga livre.
    */
   pin?: number;
+  /**
+   * Mesas reservadas pela fonte (posição na ordem de preferência das mesas da sala, como `AgentInfo.desk`): ficam
+   * vazias para um funcionário que ainda vai chegar e nenhum outro personagem (subagente, extra) as ocupa.
+   */
+  deskHolds?: number[];
   /** Semente para cores/decoração determinísticas. */
   seed: number;
   createdAt: number;

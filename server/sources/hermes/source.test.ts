@@ -366,6 +366,9 @@ describe('layout de funcionários fixos', () => {
     // Filial: 'filial' é a mesa 0; 'fantasma' (sem banco) reserva a mesa 1, sem personagem nenhum
     expect(desk('filial')).toBe(0);
     expect(snap.agents.some((a) => a.id.includes('fantasma'))).toBe(false);
+    // a mesa do 'fantasma' vai na sala como reservada; a sala sem reservas não leva o campo
+    expect(snap.rooms.find((r) => r.name === 'Filial-Sul')?.deskHolds).toEqual([1]);
+    expect(snap.rooms.find((r) => r.name === 'Matriz')?.deskHolds).toBeUndefined();
     const groups = [{ name: 'Filial', profiles: ['alfa', 'reservado', 'beta', 'outro'] }];
     const h = makeHome(['alfa', 'beta']);
     const found = discoverHermesProfiles(h.home, {}, groups).filter((p) => p.group);
