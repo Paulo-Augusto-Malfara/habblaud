@@ -136,6 +136,14 @@ describe('assentos e reservas', () => {
     expect(chooseSeat(spots, free, 'main')?.id).toBe('d0');
   });
 
+  it('mesas reservadas só servem a quem pediu a posição delas', () => {
+    const spots = [spot('d0', 'desk', { rank: 0 }), spot('d1', 'desk', { rank: 1 }), spot('d2', 'desk', { rank: 2 })];
+    const free = () => true;
+    expect(chooseSeat(spots, free, 'sub', undefined, [0, 1])?.id).toBe('d2');
+    expect(chooseSeat(spots, free, 'main', 1, [0, 1])?.id).toBe('d1');
+    expect(chooseSeat(spots, (id) => id !== 'd2', 'sub', undefined, [0, 1])?.id).not.toBe('d0');
+  });
+
   it('reserva tem um único dono e alternativas livres são encontradas', () => {
     const reg = new SpotRegistry();
     reg.setSpots([spot('c1', 'coffee', { tx: 0 }), spot('c2', 'coffee', { tx: 10 })]);

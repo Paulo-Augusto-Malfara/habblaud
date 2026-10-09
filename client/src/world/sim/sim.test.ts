@@ -431,6 +431,77 @@ describe('salas sem buracos', () => {
     expect(sim.rooms.get('/a')!.lightOn).toBe(true);
   });
 
+  describe('funcionário fixo sempre visível no seu lugar', () => {
+    const sede = { ...room('/sede', 1), pin: 0 };
+    const ignis = { ...room('/ignis', 3), pin: 6 };
+    const fixos = (st: AgentInfo['status'] = 'idle') => [
+      agent('mia', '/sede', st, { fixed: true, desk: 0, post: 'recepcao' }),
+      agent('otto', '/sede', st, { fixed: true, desk: 1, post: 'lounge' }),
+      agent('febe', '/sede', st, { fixed: true, desk: 2 }),
+      agent('vesta', '/ignis', st, { fixed: true, desk: 0 }),
+    ];
+    const noLugar = (sim: Sim) => {
+      for (const ch of sim.chars.values()) {
+        expect(ch.alpha, ch.id).toBe(1);
+        expect(ch.hiddenUntil, ch.id).toBeLessThanOrEqual(sim.now);
+        expect(ch.homeSpot, ch.id).toBeTruthy();
+        expect(ch.atSpot, ch.id).toBe(ch.homeSpot);
+      }
+      const g = (id: string) => sim.spots.get(sim.chars.get(id)!.homeSpot)?.group;
+      expect(g('mia')).toBe('post:recepcao');
+      expect(g('otto')).toBe('post:lounge');
+    };
+
+    it('no primeiro snapshot (página recém-aberta)', () => {
+      for (const st of ['idle', 'working'] as const) {
+        const sim = newSim();
+        const clock = { now: T0 };
+        sim.applySnapshot(snap([sede, ignis], fixos(st)), clock.now);
+        noLugar(sim);
+        run(sim, clock, 5);
+        noLugar(sim);
+      }
+    });
+
+    it('chegando depois (pelo elevador) e ficando ociosos por muito tempo', () => {
+      const sim = newSim();
+      const clock = { now: T0 };
+      sim.applySnapshot(snap([], []), clock.now);
+      run(sim, clock, 1);
+      sim.applySnapshot(snap([sede, ignis], fixos(), 2), clock.now);
+      run(sim, clock, 40);
+      noLugar(sim);
+      run(sim, clock, 600);
+      noLugar(sim);
+    });
+
+    it('posto sem caminho: senta numa mesa da sala do grupo (nunca some)', () => {
+      const sim = newSim();
+      const clock = { now: T0 };
+      (sim as unknown as { reachable: () => boolean }).reachable = () => false;
+      sim.applySnapshot(snap([sede], fixos().slice(0, 3)), clock.now);
+      run(sim, clock, 5);
+      for (const id of ['mia', 'otto']) {
+        const ch = sim.chars.get(id)!;
+        expect(sim.spots.get(ch.homeSpot)?.kind).toBe('desk');
+        expect(ch.atSpot).toBe(ch.homeSpot);
+        expect(ch.roomId).toBe('/sede');
+      }
+    });
+
+    it('mesa reservada (deskHolds) não é ocupada por um subagente', () => {
+      const sim = newSim();
+      const clock = { now: T0 };
+      const dono = agent('dono', '/sede', 'idle', { fixed: true, desk: 1 });
+      const subs = [0, 1, 2, 3, 4].map((i) => agent(`sub${i}`, '/sede', 'working', { kind: 'sub', parentId: 'dono' }));
+      sim.applySnapshot(snap([{ ...sede, deskHolds: [0, 2] }], [dono, ...subs]), clock.now);
+      run(sim, clock, 3);
+      const desks = sim.rooms.get('/sede')!.layout.spots.filter((s) => s.kind === 'desk').sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
+      for (const s of subs) expect([desks[0].id, desks[2].id]).not.toContain(sim.chars.get(s.id)!.homeSpot);
+      expect(sim.chars.get('dono')!.homeSpot).toBe(desks[1].id);
+    });
+  });
+
   it('funcionário fixo ocioso (sozinho na sala) não sai em passeio; o comum sai', () => {
     const left = (extra: Partial<AgentInfo>, seconds: number) => {
       const sim = newSim();

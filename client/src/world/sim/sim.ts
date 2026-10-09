@@ -471,9 +471,22 @@ export class Sim {
     const room = this.rooms.get(ch.roomId);
     if (!room || !room.present) return;
     // posto fixo do núcleo (recepção, lounge), se pedido e livre; senão a mesa da sala
-    const post = ch.info.post ? this.building.spots.find((s) => s.group === `post:${ch.info.post}` && this.spots.isFree(s.id, ch.id)) : undefined;
-    const seat = post ?? chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind, ch.info.desk);
+    const post = ch.info.post ? this.building.spots.find((s) => s.group === `post:${ch.info.post}` && this.spots.isFree(s.id, ch.id) && this.reachable(s, room)) : undefined;
+    const seat = post ?? chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind, ch.info.desk, this.heldDesks(room));
     if (seat && this.spots.reserve(seat.id, ch.id)) ch.homeSpot = seat.id;
+  }
+
+  /** Mesas guardadas da sala: as reservadas pela fonte e as dos funcionários fixos (quem as pede pela posição as usa). */
+  private heldDesks(room: RoomState): number[] {
+    const held = new Set(room.info.deskHolds);
+    for (const c of this.chars.values()) if (c.info.fixed && c.info.desk !== undefined && c.roomId === room.id && !c.gone) held.add(c.info.desk);
+    return [...held];
+  }
+
+  /** O ponto tem caminho até a sala (posto cercado ou isolado não serve: o agente iria para a mesa, nunca ficaria perdido)? */
+  private reachable(s: SpotDef, room: RoomState): boolean {
+    const door = room.layout.spots.find((p) => p.kind === 'desk') ?? room.layout.spots[0];
+    return !door || this.findPath(s.tx, s.ty, door.tx, door.ty, []);
   }
 
   private pickElevator(ch: Character): Elevator {
@@ -1249,7 +1262,7 @@ export class Sim {
   }
 
   private hasFreeSeat(room: RoomState, ch: Character): boolean {
-    return !!chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind);
+    return !!chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind, ch.info.desk, this.heldDesks(room));
   }
 
   /** Tile livre para alguém ficar em pé (sem assento, sem spot e sem outra pessoa). */
