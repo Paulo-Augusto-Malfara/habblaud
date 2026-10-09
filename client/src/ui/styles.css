@@ -7304,3 +7304,14 @@ html.is-replay #world {
     display: none;
   }
 }
+
+/* Linha do tempo do agente: "Mostrar mais" / "Mostrar menos" (15 itens por vez). */
+.ui-timeline__more {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ui-timeline__more:not(:has(> :not([hidden]))) {
+  display: none;
+}
