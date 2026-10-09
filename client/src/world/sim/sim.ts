@@ -111,6 +111,7 @@ export class Sim {
   private lastSnapshot: OfficeSnapshot | null = null;
   /** Desde quando há uma vaga livre antes da última sala (0 = não há). */
   private gapSince = 0;
+  private pinnedSlots = new Set<number>();
   private moveSeq = 0;
   private shrinkPending = false;
   private nextHousekeeping = 0;
@@ -144,6 +145,8 @@ export class Sim {
 
     // ---- salas
     let layoutDirty = false;
+    // vagas fixas pedidas pela fonte (RoomInfo.pin): ninguém mais ocupa nem compacta para elas
+    this.pinnedSlots = new Set(snap.rooms.flatMap((r) => (r.pin === undefined ? [] : [r.pin])));
     const listed = new Set<string>();
     // na ordem de chegada (slot do servidor): na carga inicial as salas ocupam as vagas 0, 1, 2... nessa ordem
     for (const r of [...snap.rooms].sort((a, b) => a.slot - b.slot)) {
@@ -226,20 +229,23 @@ export class Sim {
     } catch {
       theme = FALLBACK_THEME;
     }
-    // a primeira vaga livre do prédio (o slot do servidor só dá a ordem de chegada)
-    const slot = this.freeSlot();
+    // a vaga fixa pedida (se estiver livre) ou a primeira vaga livre do prédio (o slot do servidor só dá a ordem de chegada)
+    const slot = r.pin !== undefined && !this.slotTaken(r.pin) ? r.pin : this.freeSlot();
     const layout = layoutProjectRoom({ id: r.id, slot, seed: r.seed }, theme);
     const rs = new RoomState(r, theme, layout, first ? 'ready' : 'building', now, first, slot);
     this.rooms.set(r.id, rs);
     return rs;
   }
 
-  /** Menor vaga sem sala (contando as que ainda estão desmontando). */
+  private slotTaken(slot: number): boolean {
+    for (const r of this.rooms.values()) if (r.phase !== 'gone' && r.slot === slot) return true;
+    return false;
+  }
+
+  /** Menor vaga sem sala (contando as que ainda estão desmontando) e que nenhuma sala pediu como vaga fixa. */
   private freeSlot(): number {
-    const used = new Set<number>();
-    for (const r of this.rooms.values()) if (r.phase !== 'gone') used.add(r.slot);
     let slot = 0;
-    while (used.has(slot)) slot++;
+    while (this.slotTaken(slot) || this.pinnedSlots.has(slot)) slot++;
     return slot;
   }
 
@@ -464,7 +470,9 @@ export class Sim {
     ch.homeSpot = null;
     const room = this.rooms.get(ch.roomId);
     if (!room || !room.present) return;
-    const seat = chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind);
+    // posto fixo do núcleo (recepção, lounge), se pedido e livre; senão a mesa da sala
+    const post = ch.info.post ? this.building.spots.find((s) => s.group === `post:${ch.info.post}` && this.spots.isFree(s.id, ch.id)) : undefined;
+    const seat = post ?? chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind);
     if (seat && this.spots.reserve(seat.id, ch.id)) ch.homeSpot = seat.id;
   }
 
@@ -609,7 +617,7 @@ export class Sim {
     const free = this.freeSlot();
     let far: RoomState | null = null;
     for (const r of this.rooms.values()) {
-      if (r.slot > free && !r.ghost && r.listed && r.phase === 'ready' && (!far || r.slot > far.slot)) far = r;
+      if (r.slot > free && r.info.pin === undefined && !r.ghost && r.listed && r.phase === 'ready' && (!far || r.slot > far.slot)) far = r;
     }
     if (!far) {
       this.gapSince = 0;
@@ -1130,6 +1138,10 @@ export class Sim {
     return true;
   }
 
+  private atPost(ch: Character): boolean {
+    return !!ch.homeSpot && !!ch.info.post && this.spots.get(ch.homeSpot)?.group === `post:${ch.info.post}`;
+  }
+
   /** Decide o próximo plano. Retorna true se planejou algo. */
   private think(ch: Character, now: number): boolean {
     if (ch.gone) return false;
@@ -1141,7 +1153,8 @@ export class Sim {
     if (!ch.homeSpot) return this.planOverflow(ch, room);
     ch.standTile = null;
     // sala apagada: o primeiro a chegar acende a luz
-    if (!room.lightOn && room.phase !== 'dismantling' && !this.switchClaimValid(room)) {
+    // (quem tem posto no núcleo não é da sala: não vai acender a luz dela)
+    if (!room.lightOn && room.phase !== 'dismantling' && !this.switchClaimValid(room) && !this.atPost(ch)) {
       room.switchClaim = ch.id;
       const sw = room.layout.spots.find((p) => p.kind === 'switch');
       if (sw) {

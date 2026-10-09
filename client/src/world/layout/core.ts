@@ -63,6 +63,8 @@ export function layoutReception(): AreaLayout {
   // aberta para o corredor: divisórias de vidro nas pontas
   for (const lx of [1, 2, 3, 12, 13, 14]) b.furn('glass_partition', lx, 11, 'h', { order: 0.15 });
   b.walk(1, 2, 14, 10);
+  // posto fixo (AgentInfo.post = "recepcao"): atrás do balcão, de frente para quem chega, perto da placa
+  b.spot('stand', 10, 4, 'down', { group: 'post:recepcao', dy: -1 });
   b.spot('talk', 6, 9, 'right', { group: 'talk:recepcao', dx: -1 });
   b.spot('talk', 7, 9, 'left', { group: 'talk:recepcao', dx: 1 });
 
@@ -239,6 +241,8 @@ export function layoutLounge(): AreaLayout {
   (['red', 'blue', 'yellow'] as const).forEach((c, i) => {
     b.seat('beanbag', 'beanbag', 6 + i * 2, 9, 'down', c, { order: 0.6 + i * 0.02 });
   });
+  // posto fixo (AgentInfo.post = "lounge"): junto ao sofá, virado para a TV
+  b.spot('stand', 1, 5, 'right', { group: 'post:lounge' });
   b.spot('talk', 11, 9, 'right', { group: 'talk:lounge', dx: -1 });
   b.spot('talk', 12, 9, 'left', { group: 'talk:lounge', dx: 1 });
   // torcida do ping-pong: atrás da mesa, de frente para a câmera

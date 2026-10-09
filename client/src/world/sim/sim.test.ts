@@ -387,6 +387,50 @@ describe('salas sem buracos', () => {
     expect(sim.building.cols).toBe(4);
   });
 
+  it('vaga fixa (pin): a sala fica exatamente nela, as outras não a ocupam nem puxam a sala fixa', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const fixa = { ...room('/fixa', 0), pin: 3 };
+    sim.applySnapshot(snap([room('/a', 1), fixa, room('/b', 2)], [agent('ana', '/a', 'working'), agent('fixo', '/fixa', 'idle'), agent('bia', '/b', 'working')]), clock.now);
+    expect(sim.rooms.get('/fixa')!.slot).toBe(3);
+    // as demais pulam a vaga fixa: 0, 1 e (a 3 está reservada) 2
+    expect(['/a', '/b'].map((id) => sim.rooms.get(id)!.slot)).toEqual([0, 1]);
+    expect(sim.building.cols).toBe(4);
+    // chega uma terceira sala comum: a vaga 2 está livre, a 3 é reservada, então vai para a 2
+    sim.applySnapshot(snap([room('/a', 1), fixa, room('/b', 2), room('/c', 4)], [agent('ana', '/a', 'working'), agent('fixo', '/fixa', 'idle'), agent('bia', '/b', 'working'), agent('caio', '/c', 'working')], 2), clock.now);
+    expect(sim.rooms.get('/c')!.slot).toBe(2);
+    // a quarta pula a fixa e vai para a 4; ao compactar a fixa nunca se muda
+    sim.applySnapshot(snap([room('/a', 1), fixa, room('/b', 2), room('/c', 4), room('/d', 5)], [agent('ana', '/a', 'working'), agent('fixo', '/fixa', 'idle'), agent('bia', '/b', 'working'), agent('caio', '/c', 'working'), agent('dani', '/d', 'working')], 3), clock.now);
+    expect(sim.rooms.get('/d')!.slot).toBe(4);
+    run(sim, clock, 5);
+    expect(sim.rooms.get('/fixa')!.slot).toBe(3);
+  });
+
+  it('posto fixo: o personagem fica de pé no posto da recepção ou do lounge; sem posto livre vai para a mesa', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const rooms = [room('/a', 0)];
+    const agents = [
+      agent('rec', '/a', 'idle', { post: 'recepcao' }),
+      agent('rec2', '/a', 'idle', { post: 'recepcao' }),
+      agent('lou', '/a', 'working', { post: 'lounge' }),
+      agent('sem', '/a', 'working', { post: 'inexistente' }),
+    ];
+    sim.applySnapshot(snap(rooms, agents), clock.now);
+    run(sim, clock, 0.5);
+    const group = (id: string) => sim.spots.get(sim.chars.get(id)!.homeSpot)?.group;
+    expect(group('rec')).toBe('post:recepcao');
+    expect(group('lou')).toBe('post:lounge');
+    // o segundo da recepção não divide o posto: vai para uma mesa da sala
+    expect(sim.spots.get(sim.chars.get('rec2')!.homeSpot)?.kind).toBe('desk');
+    expect(sim.spots.get(sim.chars.get('sem')!.homeSpot)?.kind).toBe('desk');
+    const lou = sim.chars.get('lou')!;
+    expect(lou.atSpot).toBe(lou.homeSpot);
+    expect(lou.pose).toBe('read');
+    // quem tem posto não acende a luz da sala nem a segura acesa por ser o "primeiro a chegar"
+    expect(sim.rooms.get('/a')!.lightOn).toBe(true);
+  });
+
   it('terminal fechou: a sala mais distante se muda para a vaga, o pessoal vai andando e o prédio encolhe', () => {
     const sim = newSim();
     const clock = { now: T0 };
