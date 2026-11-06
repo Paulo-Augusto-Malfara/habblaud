@@ -95,6 +95,17 @@ describe('parseLine — atividades', () => {
     expect(errors[1].current).toBe(true);
   });
 
+  it('detalhe do erro remove tags, inclusive com atributos e aninhadas', () => {
+    const s = createTranscriptState();
+    const r = feed(s, [
+      L.assistant([L.tool('a', 'Bash', { command: 'x' })], { at: T0 }),
+      L.result('a', '<tool_use_error>falhou <scr<script>ipt src=x> ok</tool_use_error>', { error: true, at: T0 + 10 }),
+    ]);
+    const err = acts(r).find((x) => x.activity.kind === 'error');
+    expect(err?.activity.detail).toBe('falhou ipt src=x ok');
+    expect(err?.activity.detail).not.toMatch(/[<>]/);
+  });
+
   it('interrupção e recusa', () => {
     const s = createTranscriptState();
     const a = acts(

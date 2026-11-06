@@ -229,7 +229,8 @@ function textOf(content: unknown): string {
 
 function firstLine(s: string, max = 140): string | undefined {
   const line = s.split('\n').find((l) => l.trim());
-  return line ? truncate(line.replace(/<\/?[a-z_-]+>/gi, ''), max) : undefined;
+  // Remove tags e depois qualquer `<`/`>` solto, pra não sobrar `<script` parcial.
+  return line ? truncate(line.replace(/<[^>]*>/g, '').replace(/[<>]/g, ''), max) : undefined;
 }
 
 /** Extrai os campos de um `<task-notification>` (resultado de tarefa em segundo plano). */
